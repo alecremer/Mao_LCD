@@ -1,4 +1,6 @@
 #include <Arduino.h>
+#include "led_rgb.h"
+
     /*
   Example animated analogue meters using a ILI9341 TFT LCD screen
 
@@ -16,7 +18,8 @@
 #include <SPI.h>
 #include "ServoController.hpp"
 
-#define SERVO_SWITCH_THRESHOLD 100000
+// #define SERVO_SWITCH_THRESHOLD 100000
+#define SERVO_SWITCH_THRESHOLD 20000
 #define SERVO_SLEEP_THRESHOLD 100000
 
 
@@ -67,6 +70,97 @@ void plotNeedle(int value, byte ms_delay);
 void analogMeter();
 void plotLinear(char *label, int x, int y);
 
+
+// LED 
+
+#define AMARELO 16768256 
+#define VERMELHO 16515843
+#define VERDE 63240
+#define AZUL 49911
+led_rgb LED ;
+
+TaskHandle_t Task1, Task2;
+
+void TaskLed(void *PvParameters){
+
+  while (1)
+  {
+    LED.latch(100,AMARELO);
+  }
+  
+
+
+}
+
+
+void TaskServoDisplay(void *PvParameters){
+
+
+
+  while (1)
+  {
+    
+    servo_switch_count++;
+
+    if (servo_switch_count > SERVO_SWITCH_THRESHOLD/2){
+
+      servo_1.control.write(servo_target_1);
+      // servo_2.control.write(servo_target_1);
+
+    }
+    else {
+
+      servo_1.control.write(servo_target_2);
+      // servo_2.control.write(servo_target_2);
+    
+    }
+
+    if (servo_switch_count > SERVO_SWITCH_THRESHOLD/2 + 1000){
+
+      // servo_1.control.write(servo_target_1);
+      servo_2.control.write(servo_target_1);
+
+    }
+    else {
+
+      // servo_1.control.write(servo_target_2);
+      servo_2.control.write(servo_target_2);
+    
+    }
+
+    if(servo_switch_count > SERVO_SWITCH_THRESHOLD) servo_switch_count = 0;
+
+
+    // display
+    if (updateTime <= millis()) {
+      updateTime = millis() + LOOP_PERIOD;
+
+      d += 4; if (d >= 360) d = 0;
+
+      //value[0] = map(analogRead(A0), 0, 1023, 0, 100); // Test with value form Analogue 0
+
+      // Create a Sine wave for testing
+      value[0] = 50 + 50 * sin((d + 0) * 0.0174532925);
+      value[1] = 50 + 50 * sin((d + 60) * 0.0174532925);
+      value[2] = 50 + 50 * sin((d + 120) * 0.0174532925);
+      value[3] = 50 + 50 * sin((d + 180) * 0.0174532925);
+      value[4] = 50 + 50 * sin((d + 240) * 0.0174532925);
+      value[5] = 50 + 50 * sin((d + 300) * 0.0174532925);
+
+      //unsigned long t = millis();
+
+      plotPointer();
+
+      plotNeedle(value[0], 0);
+
+      //Serial.println(millis()-t); // Print time taken for meter update
+    }
+  }
+
+
+}
+
+
 void setup(void) {
 
 
@@ -95,10 +189,36 @@ void setup(void) {
   plotLinear("A5", 5 * d, 160);
 
   updateTime = millis(); // Next update time
+
+
+
+  LED.init();
+
+  xTaskCreatePinnedToCore(
+                    TaskLed,   /* Task function. */
+                    "Task2",     /* name of task. */
+                    10000,       /* Stack size of task */
+                    NULL,        /* parameter of the task */
+                    1,           /* priority of the task */
+                    &Task1,      /* Task handle to keep track of created task */
+                    0);          /* pin task to core 1 */
+  delay(500);
+  xTaskCreatePinnedToCore(
+                    TaskServoDisplay,   /* Task function. */
+                    "Task2",     /* name of task. */
+                    10000,       /* Stack size of task */
+                    NULL,        /* parameter of the task */
+                    1,           /* priority of the task */
+                    &Task2,      /* Task handle to keep track of created task */
+                    1);          /* pin task to core 1 */
+  delay(500);
+
 }
 
 
 void loop() {
+
+
 
   // servo1_switch_count++;
 
@@ -140,63 +260,6 @@ void loop() {
   //   servo1_target = (servo1_target == servo_target_1) ? servo_target_2 : servo_target_1;
   // }  
   
-
-
-  servo_switch_count++;
-
-  if (servo_switch_count > SERVO_SWITCH_THRESHOLD/2){
-
-    servo_1.control.write(servo_target_1);
-    // servo_2.control.write(servo_target_1);
-
-  }
-  else {
-
-    servo_1.control.write(servo_target_2);
-    // servo_2.control.write(servo_target_2);
-  
-  }
-
-  if (servo_switch_count > SERVO_SWITCH_THRESHOLD/2 + 5000){
-
-    // servo_1.control.write(servo_target_1);
-    servo_2.control.write(servo_target_1);
-
-  }
-  else {
-
-    // servo_1.control.write(servo_target_2);
-    servo_2.control.write(servo_target_2);
-  
-  }
-
-  if(servo_switch_count > SERVO_SWITCH_THRESHOLD) servo_switch_count = 0;
-
-
-  // display
-  if (updateTime <= millis()) {
-    updateTime = millis() + LOOP_PERIOD;
-
-    d += 4; if (d >= 360) d = 0;
-
-    //value[0] = map(analogRead(A0), 0, 1023, 0, 100); // Test with value form Analogue 0
-
-    // Create a Sine wave for testing
-    value[0] = 50 + 50 * sin((d + 0) * 0.0174532925);
-    value[1] = 50 + 50 * sin((d + 60) * 0.0174532925);
-    value[2] = 50 + 50 * sin((d + 120) * 0.0174532925);
-    value[3] = 50 + 50 * sin((d + 180) * 0.0174532925);
-    value[4] = 50 + 50 * sin((d + 240) * 0.0174532925);
-    value[5] = 50 + 50 * sin((d + 300) * 0.0174532925);
-
-    //unsigned long t = millis();
-
-    plotPointer();
-
-    plotNeedle(value[0], 0);
-
-    //Serial.println(millis()-t); // Print time taken for meter update
-  }
 
 
 
